@@ -1,36 +1,79 @@
-var mongoose = require('mongoose')
-var conn = mongoose.connect('mongodb://localhost/gitstamps')
-var ProfileModel = require("../models/profile")
-var GitstampModel = require("../models/gitstamp")
+require("./schema");
+var mongoose = require("mongoose");
+var db = mongoose.connection;
+var profileNames = [
+                    {"name":"bobby"},
+                    {"name":"james"},
+                    {"name":"christine"},
+                    {"name":"todd"}
+                  ];
+var gitstampStuff = {
+                      "bobby": [
+                        {
+                          "data": "data1"
+                        },
+                        {"data": "data 2"
+                        }
+                      ],
+                      "james": [
+                        {
+                          "data": "data3"
+                        },
+                        {"data": "data 4"
+                        }
+                      ],
+                      "christine": [
+                        {
+                          "data": "data5"
+                        },
+                        {"data": "data6"
+                        }
+                      ],
+                      "todd": [
+                        {
+                          "data": "data7"
+                        },
+                        {"data": "data 8"
+                        }
+                      ]
+                    }
 
-ProfileModel.remove({}, function(err){
-  console.log(err)
-})
-GitstampModel.remove({}, function(err){
-  console.log(err)
-})
+db.on("error", function(err){
+  console.log("Oops! Mongo threw an error. Is `mongod` running?");
+  console.log(err.message);
+  process.exit();
+});
 
-var bob = new ProfileModel({name: "bob"})
-var susy = new ProfileModel({name: "susy"})
-var tom = new ProfileModel({name: "tom"})
+db.once("open", function(){
+  console.log("Connected to the database.");
+  var Profile = require("../models/profile");
+  var Gitstamp = require("../models/gitstamp");
 
-var gitstamp1 = new GitstampModel({data: Math.random()});
-var gitstamp2 = new GitstampModel({data: Math.random()});
-var gitstamp3 = new GitstampModel({data: Math.random()});
-var gitstamp4 = new GitstampModel({data: Math.random()});
-var gitstamp5 = new GitstampModel({data: Math.random()});
-var gitstamp6 = new GitstampModel({data: Math.random()});
+  Gitstamp.remove({}).then(function(){
+    Profile.remove({}).then(function(){
+      forEach(profileNames, function(profileName){
+        return new Profile(profileName).save().then(function(profile){
+          return forEach(gitstampStuff[profile.name], function(gitstampData){
+            gitstamp = new Gitstamp(gitstampData);
+            console.log(profile.name + " owns " + gitstamp.data);
+            gitstamp.profile = profile;
+            return gitstamp.save().then(function(gitstamp){
+              profile.gitstamps.push(gitstamp);
+              profile.save();
+            });
+          })
+        });
+      }).then(function(){
+        process.exit();
+      });
+    });
+  });
 
-var profiles = [bob, susy, tom]
-var gitstamps = [gitstamp1, gitstamp2, gitstamp3, gitstamp4, gitstamp5, gitstamp6]
+});
 
-for(var i = 0; i < profiles.length; i++){
-  profiles[i].gitstamps.push(gitstamps[i],gitstamps[i+3])
-  profiles[i].save(function(err){
-    if (err){
-      console.log(err)
-    }else {
-      console.log("profile was saved")
-    }
-  })
+function forEach(collection, callback, index){
+  if(!index) index = 0;
+  return callback(collection[index]).then(function(){
+    if(collection[index + 1]) return forEach(collection, callback, index + 1);
+  });
 }

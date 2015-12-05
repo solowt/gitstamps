@@ -1,16 +1,18 @@
 var express = require('express');
 var app = express();
-var mongoose = require('mongoose');
-// var ProfileModel = require("./models/profile");
-// var GitstampModel = require("./models/gitstamp");
-// var bodyParser = require("body-parser");
-// app.use(bodyParser.json());
+var bodyParser = require("body-parser");
+app.use(bodyParser.json());
 
-mongoose.connect('mongodb://localhost/gitstamps');
+// var path = require("path");
+// app.use(express.static(path.join(__dirname, "/public")));
 
-app.get("/", function(req, res){
-  res.send("hello");
-});
+// app.get("/", function(req, res){
+//   res.render("index.html");
+// });
+
+// app.get("/", profilesController.index);
+
+app.use("/profiles", require("./controllers/profilesController"));
 
 app.listen(3000, function(){
   console.log("app listening on port 3000");
