@@ -11,8 +11,8 @@ app.use(bodyParser.json());
 // });
 
 // app.get("/", profilesController.index);
-
-app.use("/profiles", require("./controllers/profilesController"));
+app.set('view engine', 'hbs');
+app.use("/api", require("./controllers/apiController"));
 
 app.listen(3000, function(){
   console.log("app listening on port 3000");
