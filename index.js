@@ -10,7 +10,6 @@ app.use(bodyParser.json());
 //   res.render("index.html");
 // });
 
-// app.get("/", profilesController.index);
 app.set('view engine', 'hbs');
 app.use("/api", require("./controllers/apiController"));
 
