@@ -13,6 +13,7 @@ var ObjectId = Schema.Types.ObjectId;
 var ProfileSchema = new Schema(
   {
     name: String,
+    createdAt: Date,
     gitstamps: [{type: ObjectId, ref: "Gitstamp"}]
   },
   {
@@ -24,6 +25,7 @@ var ProfileSchema = new Schema(
 // defining schema for reminders
 var GitstampSchema = new Schema({
   data: String,
+  createdAt: Date,
   profile: {type: ObjectId, ref: "Profile"}
 });
 

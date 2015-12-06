@@ -6,7 +6,7 @@ Group Project 3, WDI7 General Assembly
 2. cd into directory
 3. `npm install`
 4. start instance of `mongod`
-5. run node db/seeds.js
+5. run node `db/seeds.js`
 6. run `nodemon index.js`
 7. view on `localhost:3000`
 
