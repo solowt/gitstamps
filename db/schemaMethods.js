@@ -159,7 +159,7 @@ var getAuthRecursive = function(user, github, repo){
 // it can be called recursively in the event of a timeout when trying to get
 // commit messages from a given repository.
 var getMsgsRecursive = function(user, github, repo, retryCount){
-  console.log("Retrying...")
+  console.log("Retrying...");
   var msgs = []; // array to hold every message on a given repo
   return new Promise(function(resolve, reject){
     github.repos.getCommits({
@@ -168,19 +168,19 @@ var getMsgsRecursive = function(user, github, repo, retryCount){
       per_page: 100
     }, function(error, response){
       if (error){
-        if (retryCount == 0){
-          console.log("Oh well, we tried...")
-          reject(msgs)
-        } else {
-          console.log(error+" Retrying again...")
-          getMsgsRecursive(user, github, repo, retryCount--)
-        }
+        // if (retryCount == 0){
+          console.log("Oh well, we tried...");
+          reject(error);
+        // } else {
+        //   console.log(error+" Retrying again...");
+        //   getMsgsRecursive(user, github, repo, retryCount--);
+        // }
       }else{
         // make sure the user in question is the author of the commit
         for (var a = 0; a < response.length; a++){
           if (response[a]['committer']) {
             if (response[a]['committer']['login'] == user) {
-              msgs.push(response[a]['commit']['message']) // add message onto the array
+              msgs.push(response[a]['commit']['message']); // add message onto the array
             }
           }
         }
@@ -206,9 +206,11 @@ var getCommitMessages = function (user, github, names){
         if (error) {
           console.log("ERROR in GH CALL @"+names[this.i]+": "+error)
           // callsDone++;
-          getMsgsRecursive(user, github, names[this.i],1).then(function(msgs){
-            console.log("Msg retry successful!("+callsDone+")")
-            nameMsgMap[names[this.i].replace(/\./g,' ')] = msgs;
+          getMsgsRecursive(user, github, names[this.i],1).then(function(msgs, error){
+            if (msgs){
+              console.log("Msg retry successful!("+callsDone+")")
+              nameMsgMap[names[this.i].replace(/\./g,' ')] = msgs;
+            }
             if (++callsDone == names.length){ // check to see if we've done the total number of calls.  if we have, the number of calls will equal the number of repos
               console.log("Got Commit Messages!"); // success message
               resolve(nameMsgMap);
@@ -249,14 +251,14 @@ var getLangsRecursive = function(user, github, repo, retryCount){
       per_page: 100
     }, function(error, response){
       if (error){
-        if (retryCount == 0){
+        // if (retryCount == 0){
         console.log("Oh well, we tried...")
-        reject(response)
-      } else {
-        console.log(error+" Retrying again...")
-        getLangsRecursive(user, github, repo, retryCount--)
-      }
-      }else{
+        reject(error)
+      // } else {
+      //   console.log(error+" Retrying again...")
+      //   getLangsRecursive(user, github, repo, retryCount--)
+      // }
+    }else{
         resolve(response);
       }
     })
@@ -278,11 +280,12 @@ var getLangs = function(user, github, names){
       }, function(error, response){
         if (error) {
           console.log("ERROR in GH CALL @"+names[this.i]+": "+error)
-          getLangsRecursive(user, github, names[this.i], 1).then(function(langs){
-            calls++;
-            console.log("Lang retry successful!("+(calls)+")")
-            nameLangMap[names[this.i].replace(/\./g,' ')] = langs;
-            if (calls == names.length){ // check to see if we've done the total number of calls.  if we have, the number of calls will equal the number of repos
+          getLangsRecursive(user, github, names[this.i], 1).then(function(langs, error){
+            if (langs){
+              console.log("Lang retry successful!("+(calls)+")")
+              nameLangMap[names[this.i].replace(/\./g,' ')] = langs;
+            }
+            if (++calls == names.length){ // check to see if we've done the total number of calls.  if we have, the number of calls will equal the number of repos
               console.log("Got Languages Messages!"); // success message
               resolve(nameLangMap);
             }
