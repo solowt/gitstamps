@@ -14,9 +14,11 @@ ProfileView.prototype = {
     var stampsDiv = self.$el.find(".stamps");
     self.appendStamp(self.profile.stamps,stampsDiv);
 
-    if(stampsDiv.children().length === 0){
-      self.makeNewStamp(self.profile.id, stampsDiv)
-    }
+
+    // commenting this out as it causes issues
+    // if(stampsDiv.children().length === 0){
+    //   self.makeNewStamp(self.profile.id, stampsDiv)
+    // }
 
     var newStamp = self.$el.find(".addStamp");
     newStamp.on("click",function(){

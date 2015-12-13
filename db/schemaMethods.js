@@ -8,7 +8,7 @@ var setUp = function(token) {
     protocol: "https",
     host: "api.github.com",
     pathPrefix: "",
-    timeout: 5000, // responses will time out after this many milliseconds
+    timeout: 3000, // responses will time out after this many milliseconds
     headers: {
     }
   });
@@ -117,6 +117,15 @@ var getDataSimul = function(user, github, names, stamp){
   return new Promise(function(resolve, reject){
     var gotMsgs = false;
     var gotLangs = false;
+    getCommitMessages(user, github, names).then(function(nameMsgMap){
+      stamp.data.commitMessages = nameMsgMap;
+      stamp.data.averageMessageLength = msgAverages(stamp.data.commitMessages) // calculate average commit message length
+      gotMsgs = true;
+    }).then(function(){
+      if (gotLangs == true){  // if languages are already saved when msgs return (likely)
+        resolve(stamp)
+      }
+    })
     getLangs(user, github, names).then(function(nameLangMap){
       stamp.data.languages = nameLangMap; // add raw languuage data to stamp
       stamp.data.langTotals = parseLangs(nameLangMap); // compile the raw language data into total language per user stat
@@ -127,34 +136,10 @@ var getDataSimul = function(user, github, names, stamp){
         resolve(stamp) // return the completed stamp, after this it will be added to a profile and saved (in profilesController)
       }
     })
-    getCommitMessages(user, github, names).then(function(nameMsgMap){
-      stamp.data.commitMessages = nameMsgMap;
-      stamp.data.averageMessageLength = msgAverages(stamp.data.commitMessages) // calculate average commit message length
-      gotMsgs = true;
-    }).then(function(){
-      if (gotLangs == true){  // if languages are already saved when msgs return (likely)
-        resolve(stamp)
-      }
-    })
   })
 }
 
 
-// this function is meant to solve the issue of gateway timeouts (error 504s)
-// it can be called recursively in the event of a timeout when trying to get
-// commit messages from a given repository.
-var getLangsRecursive = function(user, github, repo){
-  return new Promise(function(resolve, reject){
-    github.repos.getCommits({
-      user: user,
-      repo: repo,
-      per_page: 100
-    }, function(error, response){
-
-
-    })
-  })
-}
 // this function is meant to solve the issue of gateway timeouts (error 504s)
 // it can be called recursively in the event of a timeout when trying to get
 // commit messages from a given repository.
@@ -173,8 +158,9 @@ var getAuthRecursive = function(user, github, repo){
 // this function is meant to solve the issue of gateway timeouts (error 504s)
 // it can be called recursively in the event of a timeout when trying to get
 // commit messages from a given repository.
-var getMsgsRecursive = function(user, github, repo){
+var getMsgsRecursive = function(user, github, repo, retryCount){
   console.log("Retrying...")
+  var msgs = []; // array to hold every message on a given repo
   return new Promise(function(resolve, reject){
     github.repos.getCommits({
       user: user,
@@ -182,11 +168,14 @@ var getMsgsRecursive = function(user, github, repo){
       per_page: 100
     }, function(error, response){
       if (error){
-        console.log(error+" Retrying again...")
-        getMsgsRecursive(user, github, repo)
+        if (retryCount == 0){
+          console.log("Oh well, we tried...")
+          reject(msgs)
+        } else {
+          console.log(error+" Retrying again...")
+          getMsgsRecursive(user, github, repo, retryCount--)
+        }
       }else{
-        console.log("Retry sucessful! Messages from @"+repo+" retrieved!");
-        var msgs = []; // array to hold every message on a given repo
         // make sure the user in question is the author of the commit
         for (var a = 0; a < response.length; a++){
           if (response[a]['committer']) {
@@ -216,18 +205,18 @@ var getCommitMessages = function (user, github, names){
       }, function(error, response){
         if (error) {
           console.log("ERROR in GH CALL @"+names[this.i]+": "+error)
-          callsDone++;
-          // getMsgsRecursive(user, github, names[this.i]).then(function(msgs){
-          //   console.log("Back in normal func")
-          //   nameMsgMap[names[this.i].replace(/\./g,' ')] = msgs;
-          //   callsDone++;
-          //   callsDone++;
-          //   console.log(callsDone);
-          // }.bind(this))
+          // callsDone++;
+          getMsgsRecursive(user, github, names[this.i],1).then(function(msgs){
+            console.log("Msg retry successful!("+callsDone+")")
+            nameMsgMap[names[this.i].replace(/\./g,' ')] = msgs;
+            if (++callsDone == names.length){ // check to see if we've done the total number of calls.  if we have, the number of calls will equal the number of repos
+              console.log("Got Commit Messages!"); // success message
+              resolve(nameMsgMap);
+            }
+          }.bind(this))
         } else if (response) {
           callsDone++;
-          console.log(callsDone)
-          console.log("Messages from @"+names[this.i]+" retrieved!"+"("+(callsDone+1)+")") // sucess message
+          console.log("Messages from @"+names[this.i]+" retrieved!"+"("+callsDone+")") // sucess message
           var msgs = []; // array to hold every message on a given repo
           // make sure the user in question is the author of the commit
           for (var a = 0; a < response.length; a++){
@@ -248,6 +237,31 @@ var getCommitMessages = function (user, github, names){
     }
   })
 }
+// this function is meant to solve the issue of gateway timeouts (error 504s)
+// it can be called recursively in the event of a timeout when trying to get
+// commit messages from a given repository.
+var getLangsRecursive = function(user, github, repo, retryCount){
+  console.log("Retrying...")
+  return new Promise(function(resolve, reject){
+    github.repos.getLanguages({
+      user: user,
+      repo: repo,
+      per_page: 100
+    }, function(error, response){
+      if (error){
+        if (retryCount == 0){
+        console.log("Oh well, we tried...")
+        reject(response)
+      } else {
+        console.log(error+" Retrying again...")
+        getLangsRecursive(user, github, repo, retryCount--)
+      }
+      }else{
+        resolve(response);
+      }
+    })
+  })
+}
 // this function takes a user and a list of repos.  it fins the language breakdown per repo and returns that
 // information through a promise.  after this promise is fufilled (back in the profilescontroller) we save all this
 // data to the stamp and render it
@@ -263,11 +277,19 @@ var getLangs = function(user, github, names){
         per_page: 100
       }, function(error, response){
         if (error) {
-          calls++;
           console.log("ERROR in GH CALL @"+names[this.i]+": "+error)
+          getLangsRecursive(user, github, names[this.i], 1).then(function(langs){
+            calls++;
+            console.log("Lang retry successful!("+(calls)+")")
+            nameLangMap[names[this.i].replace(/\./g,' ')] = langs;
+            if (calls == names.length){ // check to see if we've done the total number of calls.  if we have, the number of calls will equal the number of repos
+              console.log("Got Languages Messages!"); // success message
+              resolve(nameLangMap);
+            }
+          }.bind(this))
         }else if (response) {
           calls++;
-          console.log("Languages from @"+names[this.i]+" retrieved!"+"("+(calls+1)+")") // success message
+          console.log("Languages from @"+names[this.i]+" retrieved!"+"("+calls+")") // success message
           nameLangMap[names[this.i].replace(/\./g,' ')] = response; // constructing the object
         }
         if (calls == names.length){ // check to see if all calls have returned
