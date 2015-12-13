@@ -81,9 +81,11 @@ var checkAuthors = function (user, github, names) {
         repo: names[i]
       }, function(err, res) {
         if (err){
+          counter++;
           console.log("Error checking contributors: "+err);
         }
         if (res) {
+          counter++;
           var use_this_repo = false;
           for (var j=0; j<res.length; j++){
             if (res[j].login) {
@@ -96,7 +98,7 @@ var checkAuthors = function (user, github, names) {
             removeCount.push(names[this.i]);
           }
         }
-        if (counter++ == originalNumRepos-1){
+        if (counter == originalNumRepos-1){
           for (var k=0; k<removeCount.length; k++){
             names.splice(names.indexOf(removeCount[k]), 1)
           }
@@ -115,15 +117,6 @@ var getDataSimul = function(user, github, names, stamp){
   return new Promise(function(resolve, reject){
     var gotMsgs = false;
     var gotLangs = false;
-    getCommitMessages(user, github, names).then(function(nameMsgMap){
-      stamp.data.commitMessages = nameMsgMap;
-      stamp.data.averageMessageLength = msgAverages(stamp.data.commitMessages) // calculate average commit message length
-      gotMsgs = true;
-    }).then(function(){
-      if (gotLangs == true){  // if languages are already saved when msgs return (likely)
-        resolve(stamp)
-      }
-    })
     getLangs(user, github, names).then(function(nameLangMap){
       stamp.data.languages = nameLangMap; // add raw languuage data to stamp
       stamp.data.langTotals = parseLangs(nameLangMap); // compile the raw language data into total language per user stat
@@ -134,11 +127,81 @@ var getDataSimul = function(user, github, names, stamp){
         resolve(stamp) // return the completed stamp, after this it will be added to a profile and saved (in profilesController)
       }
     })
+    getCommitMessages(user, github, names).then(function(nameMsgMap){
+      stamp.data.commitMessages = nameMsgMap;
+      stamp.data.averageMessageLength = msgAverages(stamp.data.commitMessages) // calculate average commit message length
+      gotMsgs = true;
+    }).then(function(){
+      if (gotLangs == true){  // if languages are already saved when msgs return (likely)
+        resolve(stamp)
+      }
+    })
   })
 }
 
+
+// this function is meant to solve the issue of gateway timeouts (error 504s)
+// it can be called recursively in the event of a timeout when trying to get
+// commit messages from a given repository.
+var getLangsRecursive = function(user, github, repo){
+  return new Promise(function(resolve, reject){
+    github.repos.getCommits({
+      user: user,
+      repo: repo,
+      per_page: 100
+    }, function(error, response){
+
+
+    })
+  })
+}
+// this function is meant to solve the issue of gateway timeouts (error 504s)
+// it can be called recursively in the event of a timeout when trying to get
+// commit messages from a given repository.
+var getAuthRecursive = function(user, github, repo){
+  return new Promise(function(resolve, reject){
+    github.repos.getCommits({
+      user: user,
+      repo: repo,
+      per_page: 100
+    }, function(error, response){
+
+
+    })
+  })
+}
+// this function is meant to solve the issue of gateway timeouts (error 504s)
+// it can be called recursively in the event of a timeout when trying to get
+// commit messages from a given repository.
+var getMsgsRecursive = function(user, github, repo){
+  console.log("Retrying...")
+  return new Promise(function(resolve, reject){
+    github.repos.getCommits({
+      user: user,
+      repo: repo,
+      per_page: 100
+    }, function(error, response){
+      if (error){
+        console.log(error+" Retrying again...")
+        getMsgsRecursive(user, github, repo)
+      }else{
+        console.log("Retry sucessful! Messages from @"+repo+" retrieved!");
+        var msgs = []; // array to hold every message on a given repo
+        // make sure the user in question is the author of the commit
+        for (var a = 0; a < response.length; a++){
+          if (response[a]['committer']) {
+            if (response[a]['committer']['login'] == user) {
+              msgs.push(response[a]['commit']['message']) // add message onto the array
+            }
+          }
+        }
+        resolve(msgs);
+      }
+    })
+  })
+}
 // this method takes an array of strings (GH repos) and finds all commit messages on those
-//repos, checking to make the author we're searching for actually authored those commitMessages
+//repos, checking to make sure the author we're searching for actually authored those commitMessages
 // it returns a promise onto which the next function is called.
 var getCommitMessages = function (user, github, names){
   return new Promise(function(resolve, reject){
@@ -151,8 +214,19 @@ var getCommitMessages = function (user, github, names){
         repo: names[i], // the current repo being searched
         per_page: 100
       }, function(error, response){
-
-        if (response) {
+        if (error) {
+          console.log("ERROR in GH CALL @"+names[this.i]+": "+error)
+          callsDone++;
+          // getMsgsRecursive(user, github, names[this.i]).then(function(msgs){
+          //   console.log("Back in normal func")
+          //   nameMsgMap[names[this.i].replace(/\./g,' ')] = msgs;
+          //   callsDone++;
+          //   callsDone++;
+          //   console.log(callsDone);
+          // }.bind(this))
+        } else if (response) {
+          callsDone++;
+          console.log(callsDone)
           console.log("Messages from @"+names[this.i]+" retrieved!"+"("+(callsDone+1)+")") // sucess message
           var msgs = []; // array to hold every message on a given repo
           // make sure the user in question is the author of the commit
@@ -165,10 +239,7 @@ var getCommitMessages = function (user, github, names){
           }
           nameMsgMap[names[this.i].replace(/\./g,' ')] = msgs; // construct the object so the key is the repo and the value is the array of commit messages
         }
-        if (error) {
-          console.log("ERROR in GH CALL @"+names[this.i]+": "+error)
-        }
-        if (++callsDone == names.length){ // check to see if we've done the total number of calls.  if we have, the number of calls will equal the number of repos
+        if (callsDone == names.length){ // check to see if we've done the total number of calls.  if we have, the number of calls will equal the number of repos
           console.log("Got Commit Messages!"); // success message
           resolve(nameMsgMap);
         }
@@ -192,13 +263,14 @@ var getLangs = function(user, github, names){
         per_page: 100
       }, function(error, response){
         if (error) {
+          calls++;
           console.log("ERROR in GH CALL @"+names[this.i]+": "+error)
-        }
-        if (response) {
+        }else if (response) {
+          calls++;
           console.log("Languages from @"+names[this.i]+" retrieved!"+"("+(calls+1)+")") // success message
           nameLangMap[names[this.i].replace(/\./g,' ')] = response; // constructing the object
         }
-        if (++calls == names.length){ // check to see if all calls have returned
+        if (calls == names.length){ // check to see if all calls have returned
           console.log("Got Languages!") // success message
           resolve(nameLangMap)
         }

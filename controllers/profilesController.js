@@ -115,7 +115,8 @@ var profilesController = {
           Functions.checkAuthors(profile.username, git, repoNames).then(function(refinedNames) { // make sure our user is a contributor on each repo then...
             // make sure the user has at least one repo he has contributed to
             if (refinedNames.length > 0) {
-              // this function will get commit msgs and language data and save all of this data to the stamp.  after this we can save the stamp
+              // this function will get commit msgs and language data and save all of this data to the stamp.  note: these calls
+              // go out simultaneously.  .then will trigger only when all the calls have returned.  after this we can save the stamp
               Functions.getDataSimul(profile.username, git, refinedNames, stamp).then(function(completedStamp){
                 completedStamp.createdAt = Date(); // add time stamp
                 profile.stamps.push(completedStamp); // push the stamp onto the owner profile's array of stamps
@@ -124,8 +125,7 @@ var profilesController = {
                   console.log("Failed to save stamp: " + err)
                 } else {
                   console.log("Saved stamp to DB under " + profile.username + "'s profile.")
-                  res.json(stamp) // respond with json
-                  return;
+                  res.json(completedStamp) // respond with json
                 }
               })
             })
